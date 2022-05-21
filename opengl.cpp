@@ -57,7 +57,7 @@ bool OpenGL::Model::open_file(const char *filename, std::ifstream &in)
 {
     
     in.open(filename, std::ifstream::in);
-    return in.fail();
+    return !in.fail();
 }
 
 void OpenGL::Model::parse_obj_file(std::ifstream &in)
