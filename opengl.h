@@ -28,6 +28,7 @@ namespace OpenGL
         };
         void render_wireframe(const std::unique_ptr<Model> &model, TGAImage &image, const TGAColor &color, Bresenham &bresenham, const int width, const int height);
         void fill_triangle(Vec2i t0, Vec2i t1, Vec2i t2, TGAImage &image, TGAColor color);
+        Vec3f barycentric_transform(Vec3f A, Vec3f B, Vec3f C, Vec3f P); 
         void render_filled_triangles(const std::unique_ptr<Model> &model, TGAImage &image, const int width, const int height);
 
     };

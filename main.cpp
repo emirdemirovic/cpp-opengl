@@ -15,9 +15,9 @@ int main(int argc, char **argv)
 
     const int width = 800;
     const int height = 800;
-    TGAImage image(width, height, TGAImage::RGB);
-    const TGAColor white(255, 255, 255, 255);
     OpenGL::Render render;
+    TGAImage image(width, height, TGAImage::RGB);
+    // const TGAColor white(255, 255, 255, 255);
     // OpenGL::Render::Bresenham bresenham;
     // render.render_wireframe(model, image, white, bresenham, width, height);
     render.render_filled_triangles(model, image, width, height);
@@ -27,3 +27,5 @@ int main(int argc, char **argv)
 
     return 0;
 }
+
+

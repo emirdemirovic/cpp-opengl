@@ -1,6 +1,7 @@
 #include "opengl.h"
 #include <vector>
 #include <memory>
+#include <limits>
 
 void OpenGL::Render::render_wireframe(const std::unique_ptr<Model> &model, TGAImage &image, const TGAColor &color, OpenGL::Render::Bresenham &bresenham, const int width, const int height)
 {
@@ -48,27 +49,74 @@ void OpenGL::Render::fill_triangle(Vec2i t0, Vec2i t1, Vec2i t2, TGAImage &image
     }
 }
 
+Vec3f OpenGL::Render::barycentric_transform(Vec3f A, Vec3f B, Vec3f C, Vec3f P)
+{
+    Vec3f s[2];
+    for (int i = 2; i--;)
+    {
+        s[i][0] = C[i] - A[i];
+        s[i][1] = B[i] - A[i];
+        s[i][2] = A[i] - P[i];
+    }
+    Vec3f u = cross(s[0], s[1]);
+    if (std::abs(u[2]) > 1e-2) // u[2] is integer (if it is zero then triangle ABC is degenerate)
+        return Vec3f(1.f - (u.x + u.y) / u.z, u.y / u.z, u.x / u.z);
+    return Vec3f(-1, 1, 1); // in this case generate negative coordinates, it will be thrown away by the rasterizator
+}
+
 void OpenGL::Render::render_filled_triangles(const std::unique_ptr<Model> &model, TGAImage &image, const int width, const int height)
 {
-    // backface culling + gouraud shading
+    std::vector<float> zbuffer(width*height);
+    for (int i = width * height; i--; zbuffer[i] = -std::numeric_limits<float>::max());
     Vec3f light_dir(0, 0, -1);
     for (int i = 0; i < model->nfaces(); i++)
     {
         std::vector<int> face = model->face(i);
         Vec2i screen_coords[3];
         Vec3f world_coords[3];
-        for (int j = 0; j < 3; j++)
+        Vec3f pts[3];
+        for (int i = 0; i < 3; i++)
         {
-            Vec3f v = model->vert(face[j]);
-            screen_coords[j] = Vec2i((v.x + 1.) * width / 2., (v.y + 1.) * height / 2.);
-            world_coords[j] = v;
+            pts[i] = Vec3f(static_cast<int>((model->vert(face[i]).x + 1.) * width / 2. + .5), static_cast<int>((model->vert(face[i]).y + 1.) * height / 2. + .5), model->vert(face[i]).z);
+            Vec3f v = model->vert(face[i]);
+            screen_coords[i] = Vec2i((v.x + 1.) * width / 2., (v.y + 1.) * height / 2.);
+            world_coords[i] = v;
         }
         Vec3f n = (world_coords[2] - world_coords[0]) ^ (world_coords[1] - world_coords[0]);
         n.normalize();
         float intensity = n * light_dir;
         if (intensity > 0)
         {
-            fill_triangle(screen_coords[0], screen_coords[1], screen_coords[2], image, TGAColor(intensity * 255, intensity * 255, intensity * 255, 255));
+            TGAColor color(intensity * 255, intensity * 255, intensity * 255, 255);
+            Vec2f bboxmin(std::numeric_limits<float>::max(), std::numeric_limits<float>::max());
+            Vec2f bboxmax(-std::numeric_limits<float>::max(), -std::numeric_limits<float>::max());
+            Vec2f clamp(image.get_width() - 1, image.get_height() - 1);
+            for (int i = 0; i < 3; i++)
+            {
+                for (int j = 0; j < 2; j++)
+                {
+                    bboxmin[j] = std::max(0.f, std::min(bboxmin[j], pts[i][j]));
+                    bboxmax[j] = std::min(clamp[j], std::max(bboxmax[j], pts[i][j]));
+                }
+            }
+            Vec3f P;
+            for (P.x = bboxmin.x; P.x <= bboxmax.x; P.x++)
+            {
+                for (P.y = bboxmin.y; P.y <= bboxmax.y; P.y++)
+                {
+                    Vec3f bc_screen = barycentric_transform(pts[0], pts[1], pts[2], P);
+                    if (bc_screen.x < 0 || bc_screen.y < 0 || bc_screen.z < 0)
+                        continue;
+                    P.z = 0;
+                    for (int i = 0; i < 3; i++)
+                        P.z += pts[i][2] * bc_screen[i];
+                    if (zbuffer[static_cast<int>(P.x + P.y * width)] < P.z)
+                    {
+                        zbuffer[static_cast<int>(P.x + P.y * width)] = P.z;
+                        image.set(P.x, P.y, color);
+                    }
+                }
+            }
         }
     }
 }
@@ -110,5 +158,3 @@ void OpenGL::Render::Bresenham::draw_line(int x0, int y0, int x1, int y1, TGAIma
         }
     }
 }
-
-
